@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100;0,300;0,400;0,500;0,700;0,900;1,100;1,300;1,400;1,500;1,700;1,900&display=swap" rel="stylesheet">
+    <title>Object Detection with TensorFlow.js</title>
+    <style>
+        body {
+            font-size: 20px;
+            font-family: "Roboto", sans-serif;
+            margin: 0;
+            height: 100vh;
+            overflow: hidden; /* Disable scrolling */
+            background-color: black;
+            background-image: url('./analyticsinsight_2024-07_b1b17276-f489-4e15-a917-6f52e71ff28a_Dont_Be_Rude_to_Your_AI_as_It_Might_Take_Revenge_in_the_Future.avif');
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+
+        .top {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .text-effect {
+            margin-top: 1vh;
+            font-size: 25px;
+            text-align: center;
+            background-image: url('./Why-get-certified-in-Artificial-Intelligence.avif');
+            background-size: cover;
+            background-position: center;
+            color: transparent;
+            -webkit-background-clip: text;
+            background-clip: text;
+            font-weight: bold;
+            line-height: 1.1;
+            width: 100%;
+        }
+
+        #image {
+            padding: 10px;
+
+            width: 340px;
+            height: 270px;
+            display: block;
+            margin: 20px auto;
+        }
+
+        #imageInput, #liveVideoButton {
+            display: block;
+            margin: 10px auto;
+            padding: 10px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #imageInput:hover, #liveVideoButton:hover {
+            background-color: #2980b9;
+        }
+
+        .loader {
+            display: none;
+            border: 8px solid #f3f3f3;
+            border-top: 8px solid #3498db;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            animation: spin 2s linear infinite;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 10;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .overlay {
+           
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 50, 0.8);
+            z-index: 5;
+        }
+
+        canvas {
+            padding: 2px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 270px;
+            height: 270px;
+            border: 1px solid #fff;
+        }
+    </style>
+</head>
+<body>
+    <div class="overlay" id="overlay"></div>
+    <div class="loader" id="loader"></div>
+
+    <div class="top">
+        <div class="text-effect">
+            Smart Vision: Real-Time Object Detection for Enhanced Interactive Systems.
+        </div>
+        <br><br>
+        <input type="file" id="imageInput" accept="image/*">
+        <button id="liveVideoButton">Live Video</button>
+        <img id="image" src="" alt="" style="display:none;">
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <script>
+        document.getElementById('imageInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const imgElement = document.getElementById('image');
+                    imgElement.src = e.target.result;
+
+                    imgElement.onload = async function() {
+                        // Display overlay and loader
+                        document.getElementById('overlay').style.display = 'block';
+                        document.getElementById('loader').style.display = 'block';
+
+                        // Perform object detection
+                        await detectObjects();
+
+                        // Hide overlay and loader after detection
+                        document.getElementById('loader').style.display = 'none';
+                        document.getElementById('overlay').style.display = 'none';
+                    };
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('liveVideoButton').addEventListener('click', async function() {
+            const video = document.createElement('video');
+            video.width = 270;
+            video.height = 270;
+            video.autoplay = true;
+
+            document.querySelector('.top').appendChild(video);
+
+            // Get access to the webcam
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+
+            video.onloadedmetadata = async function() {
+                video.play();
+                const canvas = document.getElementById('canvas');
+                const ctx = canvas.getContext('2d');
+                const model = await cocoSsd.load();
+
+                async function detectFrame() {
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    const predictions = await model.detect(video);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+                    predictions.forEach(prediction => {
+                        const [x, y, width, height] = prediction.bbox;
+                        ctx.beginPath();
+                        ctx.rect(x, y, width, height);
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = 'red';
+                        ctx.stroke();
+                        ctx.fillStyle = 'red';
+                        ctx.font = '15px Arial';
+                        ctx.fillText(`${prediction.class} (${Math.round(prediction.score * 100)}%)`, x, y > 10 ? y - 10 : 10);
+                    });
+
+                    requestAnimationFrame(detectFrame);
+                }
+
+                detectFrame();
+            };
+        });
+
+        async function detectObjects() {
+            const image = document.getElementById('image');
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Set canvas dimensions to match the image size
+            canvas.width = 270;
+            canvas.height = 270;
+
+            // Draw the image on canvas with fixed size
+            ctx.drawImage(image, 0, 0, 270, 270);
+
+            // Load the COCO-SSD model
+            const model = await cocoSsd.load();
+
+            // Perform object detection
+            const predictions = await model.detect(image);
+
+            // Scale factor to fit the bounding boxes correctly
+            const scaleX = canvas.width / image.naturalWidth;
+            const scaleY = canvas.height / image.naturalHeight;
+
+            // Draw bounding boxes and labels on canvas
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = prediction.bbox;
+                ctx.beginPath();
+                ctx.rect(x * scaleX, y * scaleY, width * scaleX, height * scaleY);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = 'red';
+                ctx.stroke();
+                ctx.fillStyle = 'red';
+                ctx.font = '15px Arial';
+                ctx.fillText(`${prediction.class} (${Math.round(prediction.score * 100)}%)`, x * scaleX, y * scaleY > 10 ? (y * scaleY) - 10 : 10);
+            });
+        }
+    </script>
+</body>
+</html>
